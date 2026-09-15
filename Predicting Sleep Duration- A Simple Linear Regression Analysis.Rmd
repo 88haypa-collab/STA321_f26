@@ -1,0 +1,172 @@
+---
+title: 'Predicting Sleep Duration: A Simple Linear Regression Analysis'
+author: 'Hayden Patterson'
+date: "09-11-2026"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    toc_depth: 4
+    fig_width: 6
+    fig_height: 4
+    fig_caption: yes
+    number_sections: yes
+    toc_collapsed: yes
+    code_folding: hide
+    code_download: yes
+    smooth_scroll: yes
+    theme: lumen
+  pdf_document: 
+    toc: yes
+    toc_depth: 4
+    fig_caption: yes
+    number_sections: yes
+  word_document:
+    toc: yes
+    toc_depth: '4'
+---
+
+<style type="text/css">
+h1.title {
+  font-size: 20px;
+  color: DarkRed;
+  text-align: center;
+}
+h4.author { /* Header 4 - and the author and data headers use this too  */
+    font-size: 18px;
+  font-family: "Times New Roman", Times, serif;
+  color: DarkRed;
+  text-align: center;
+}
+h4.date { /* Header 4 - and the author and data headers use this too  */
+  font-size: 18px;
+  font-family: "Times New Roman", Times, serif;
+  color: DarkBlue;
+  text-align: center;
+}
+h1 { /* Header 3 - and the author and data headers use this too  */
+    font-size: 22px;
+    font-family: "Times New Roman", Times, serif;
+    color: darkred;
+    text-align: center;
+}
+h2 { /* Header 3 - and the author and data headers use this too  */
+    font-size: 18px;
+    font-family: "Times New Roman", Times, serif;
+    color: navy;
+    text-align: left;
+}
+
+h3 { /* Header 3 - and the author and data headers use this too  */
+    font-size: 15px;
+    font-family: "Times New Roman", Times, serif;
+    color: navy;
+    text-align: left;
+}
+
+h4 { /* Header 4 - and the author and data headers use this too  */
+    font-size: 18px;
+    font-family: "Times New Roman", Times, serif;
+    color: darkred;
+    text-align: left;
+}
+</style>
+
+
+```{r setup, include=FALSE}
+# code chunk specifies whether the R code, warnings, and output 
+# will be included in the output files.
+library(knitr)
+knitr::opts_chunk$set(echo = TRUE,           # include code chunk in the output file
+                      warning = FALSE,       # sometimes, you code may produce warning messages,
+                                              # you can choose to include the warning messages in
+                                              # the output file. 
+                      results = TRUE          # you can also decide whether to include the output
+                                              # in the output file.
+                      )   
+```
+
+# Description of Sleep Data
+The data I used was found on Kaggle. I chose it because it sparked my interest — I've previously written a paper on sleep in a writing class, so this felt like a natural topic to explore further with regression. The dataset's exact collection methodology isn't documented in detail on Kaggle, so I can't say with certainty whether it reflects real survey responses or a curated example dataset; I'm treating it as illustrative rather than a definitive real-world sample.
+
+The data includes 374 observations of 13 variables. The categorical variables are Gender, Occupation, BMI Category, and Sleep Disorder. The numerical variables are Age, Sleep Duration, Quality of Sleep, Physical Activity Level, Stress Level, Heart Rate, and Daily Steps. Person ID and Blood Pressure are also included but aren't used analytically, Person ID is just a row identifier, and Blood Pressure is stored as a combined text field (e.g., "126/83") rather than a usable numeric value.
+
+My main analytical question is: how does stress level affect sleep duration? Given the dataset includes 374 observations, a wide range of stress levels, and Sleep Duration measured precisely in decimal hours, I believe it has enough information to meaningfully answer this question; though it's worth noting the data doesn't capture other plausible influences on sleep, like caffeine intake or sleep environment, which limits how complete a picture any single model can give.
+
+```{r load data}
+sleep <- read.csv("Sleep_health_and_lifestyle_dataset.csv")
+str(sleep)
+```
+# Simple Linear Regression
+
+```{r}
+numeric_vars <- sleep[, sapply(sleep, is.numeric)]
+pairs(numeric_vars)   # remember: fig.width/fig.height belong in the chunk header
+cor(numeric_vars, use = "complete.obs")
+```
+I chose Stress Level over the alternatives despite it not having the single strongest correlation with Sleep Duration, Quality of Sleep correlated even more strongly (0.883 vs. Stress Level's 0.811). However, Quality of Sleep and Sleep Duration are both self-reported sleep metrics, so their strong relationship likely partly reflects that they're measuring related aspects of the same experience rather than one clearly driving the other. Stress Level, by contrast, is a genuinely distinct factor, and its correlation with Sleep Duration (0.811) is still very strong. This made it a more meaningful and interesting explanatory variable for understanding what actually influences how long someone sleeps.
+
+```{r}
+plot(sleep$Stress.Level, sleep$Sleep.Duration)
+```
+The scatterplot of Stress Level against Sleep Duration shows a clear downward trend as stress increases, sleep duration decreases. Because Stress Level is measured on a discrete 1–10 rating scale (with only 6 distinct values appearing in this dataset, ranging from 3 to 8), the points cluster into vertical columns rather than spreading smoothly across the x-axis; this is expected given the nature of the variable and not a data issue. Importantly, the spread of points does not fan out or widen as Stress Level increases, the variance looks roughly consistent across the range. This suggests the relationship is reasonably linear and satisfies the constant-variance assumption without needing a transformation.
+```{r}
+library(psych)
+pairs.panels(numeric_vars, pch = 21)
+```
+# Model Summary
+
+```{r}
+model1 <- lm(Sleep.Duration ~ Stress.Level, data = sleep)
+summary(model1)
+```
+Looking at the coefficients table from the fitted model, we can interpret the slope: as Stress Level increases by 1 point, Sleep Duration decreases by approximately 0.3636 hours (about 22 minutes), holding all else in the model constant. This effect is highly statistically significant (p < 2e-16), and the model explains a substantial portion of the variation in sleep duration — an R² of 0.6578, meaning roughly 66% of the variability in Sleep Duration is accounted for by Stress Level alone.
+
+```{r diagnostics, fig.width=8, fig.height=8}
+# 4-panel residual diagnostic plots
+par(mfrow = c(2,2))
+plot(model1)
+```
+Examining the four diagnostic plots, we can assess several of the model's assumptions. The Residuals vs. Fitted plot shows a roughly flat trend line with no strong non-linear pattern, suggesting the linear relationship is reasonable, though the points cluster into columns due to Stress Level's discrete values, and one clear outlier (observation 244) stands out with a notably large negative residual. The Q-Q plot, however, reveals a violation of the normality assumption, the points deviate from the reference line at both tails, indicating the residuals are not normally distributed. The Scale-Location plot shows some mild evidence of non-constant variance, with the spread of residuals shifting somewhat across the range of fitted values. The Residuals vs. Leverage plot shows no points approaching Cook's distance thresholds, meaning there are no highly influential outliers despite observation 244's large residual. Because of the normality violation seen in the Q-Q plot, the p-values from the parametric model should be interpreted with some caution, this is the motivation for using bootstrap confidence intervals in the next section, since they don't rely on the normality assumption.
+```{r boxcox}
+library(MASS)
+boxcox(model1, lambda = seq(-2, 2, 1/10))
+```
+The Box-Cox procedure was used to formally check whether a transformation of Sleep Duration would improve the model. The plot showed the optimal λ value at approximately -0.6 to -0.7, with a 95% confidence interval spanning roughly -1.6 to 0.25. Since λ = 1 (no transformation) falls outside this interval, a transformation is technically supported by the data. However, Sleep Duration is a relatively narrow, symmetric variable (ranging roughly 5.8 to 8.5 hours) rather than a strongly skewed one, suggesting the normality violation seen in the Q-Q plot is more likely driven by Stress Level's discrete, clustered values than by skewness in the response itself. Given this, and that a transformation would make the model's coefficients harder to interpret without clearly resolving the underlying issue, no transformation was applied. Instead, the bootstrap method is used in the next section to construct confidence intervals that don't depend on the normality assumption.
+```{r bootstrap-slr}
+# bootstrap regression: resample rows with replacement, refit, repeat
+B <- 1000
+boot.beta0 <- NULL
+boot.beta1 <- NULL
+
+vec.id <- 1:nrow(sleep)   # vector of row indices
+
+for(i in 1:B){
+  boot.id <- sample(vec.id, nrow(sleep), replace = TRUE)   # bootstrap row indices
+  boot.reg <- lm(Sleep.Duration ~ Stress.Level, data = sleep[boot.id, ])
+  boot.beta0[i] <- coef(boot.reg)[1]
+  boot.beta1[i] <- coef(boot.reg)[2]
+}
+```
+
+```{r check-bootstrap}
+length(boot.beta1)
+head(boot.beta1)
+```
+
+# Nonparametric Bootstrap CI
+
+```{r bootstrap-ci}
+# 95% bootstrap confidence intervals
+boot.beta0.ci <- quantile(boot.beta0, c(0.025, 0.975), type = 2)
+boot.beta1.ci <- quantile(boot.beta1, c(0.025, 0.975), type = 2)
+boot.coef <- data.frame(rbind(boot.beta0.ci, boot.beta1.ci)) 
+names(boot.coef) <- c("2.5%", "97.5%")
+boot.coef
+```
+Comparing the two inferential approaches: the parametric model produced a p-value of essentially 0 (< 2e-16) for the Stress Level coefficient, indicating strong statistical significance. The bootstrap 95% confidence interval for the slope was (-0.383, -0.344), which is entirely negative and excludes zero, also indicating significance, and consistent with the parametric result. Although both methods agree on the conclusion in this case, the bootstrap confidence interval is the more reliable result to report, given the normality violation observed in the Q-Q residual plot. Since the parametric p-value depends on the assumption that residuals are normally distributed — an assumption this model does not fully satisfy the bootstrap approach, which makes no such distributional assumption, provides a more trustworthy basis for inference here. Both methods reaching the same conclusion (stress level is significantly negatively associated with sleep duration) strengthens confidence in the result overall
+
+# Concluding Remarks
+
+This analysis found strong evidence that stress level is negatively associated with sleep duration: each one-point increase in stress corresponds to roughly 22 fewer minutes of sleep, and this relationship held up under both parametric and bootstrap inference. Stress level alone explains about 66% of the variation in sleep duration in this dataset, suggesting it's a meaningful factor  though not the whole picture.
+
