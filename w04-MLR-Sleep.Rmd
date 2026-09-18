@@ -1,0 +1,312 @@
+---
+title: 'Predicting Sleep Duration: Multiple Linear Regression'
+author: 'Hayden Patterson'
+date: "09-17-2026"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    toc_depth: 4
+    fig_width: 6
+    fig_height: 4
+    fig_caption: yes
+    number_sections: yes
+    toc_collapsed: yes
+    code_folding: hide
+    code_download: yes
+    smooth_scroll: yes
+    theme: lumen
+  pdf_document: 
+    toc: yes
+    toc_depth: 4
+    fig_caption: yes
+    number_sections: yes
+  word_document:
+    toc: yes
+    toc_depth: '4'
+---
+
+<style type="text/css">
+h1.title {
+  font-size: 20px;
+  color: DarkRed;
+  text-align: center;
+}
+h4.author { /* Header 4 - and the author and data headers use this too  */
+    font-size: 18px;
+  font-family: "Times New Roman", Times, serif;
+  color: DarkRed;
+  text-align: center;
+}
+h4.date { /* Header 4 - and the author and data headers use this too  */
+  font-size: 18px;
+  font-family: "Times New Roman", Times, serif;
+  color: DarkBlue;
+  text-align: center;
+}
+h1 { /* Header 3 - and the author and data headers use this too  */
+    font-size: 22px;
+    font-family: "Times New Roman", Times, serif;
+    color: darkred;
+    text-align: center;
+}
+h2 { /* Header 3 - and the author and data headers use this too  */
+    font-size: 18px;
+    font-family: "Times New Roman", Times, serif;
+    color: navy;
+    text-align: left;
+}
+
+h3 { /* Header 3 - and the author and data headers use this too  */
+    font-size: 15px;
+    font-family: "Times New Roman", Times, serif;
+    color: navy;
+    text-align: left;
+}
+
+h4 { /* Header 4 - and the author and data headers use this too  */
+    font-size: 18px;
+    font-family: "Times New Roman", Times, serif;
+    color: darkred;
+    text-align: left;
+}
+</style>
+
+
+```{r setup, include=FALSE}
+# code chunk specifies whether the R code, warnings, and output 
+# will be included in the output files.
+library(knitr)
+knitr::opts_chunk$set(echo = TRUE,           # include code chunk in the output file
+                      warning = FALSE,       # sometimes, you code may produce warning messages,
+                                              # you can choose to include the warning messages in
+                                              # the output file. 
+                      results = TRUE          # you can also decide whether to include the output
+                                              # in the output file.
+                      )   
+```
+
+# Description of Sleep Data
+
+The data set used for this analysis is the Sleep Health and Lifestyle Dataset. The data contain information about 374 individuals and include demographic, lifestyle, sleep, and health-related variables. The response variable selected for this analysis is Sleep Duration, measured in hours. The potential explanatory variables include age, gender, occupation, physical activity level, stress level, BMI category, blood pressure, heart rate, daily steps, and sleep disorder. Quality of Sleep was dropped from the analysis because it is very similar to Sleep Duration and could provide redundant information. Occupation was also dropped because it contains 11 categories with very unbalanced group sizes, including several categories with very few observations, which makes it less suitable for the regression analysis.
+
+The Person ID variable is not useful for explaining sleep duration because it is simply an identification number, so it is removed from the analysis. The Blood Pressure variable is originally recorded as a single character variable such as “130/85”. Since blood pressure contains two pieces of numerical information, it is separated into Systolic and Diastolic variables. The BMI Category variable originally contains four categories: Normal, Normal Weight, Overweight, and Obese. Normal and Normal Weight were combined because they represent the same general BMI group. Obese was then combined with Overweight because the Obese category contains very few observations. This results in two BMI categories, Normal and Overweight/Obese, providing more balanced groups for the regression analysis. The Sleep Disorder variable contains three categories: Insomnia, None, and Sleep Apnea. There are no missing values in this variable, so no recoding of missing values was necessary.
+
+The final analytic data set contains 374 observations and 10 explanatory variables. The model includes seven numerical predictors and three categorical predictors. Gender has two levels and therefore requires one indicator variable. BMI has two levels and therefore requires one indicator variable, while Sleep Disorder has three levels and requires two indicator variables. Including the intercept, the regression model estimates 12 parameters from 374 observations, which gives approximately 31 observations per parameter. This is above the course guideline of 15 observations per coefficient.
+
+### Variables
+
+* **Age (X1):** age in years
+* **Gender (X2):** male / female — categorical, 2 levels
+* **Physical Activity Level (X3):** minutes of physical activity per day
+* **Stress Level (X4):** self-reported stress, measured on a 1–10 scale
+* **Systolic (X5):** systolic blood pressure
+* **Diastolic (X6):** diastolic blood pressure
+* **Heart Rate (X7):** resting heart rate
+* **Daily Steps (X8):** average daily step count
+* **BMI (X9):** Normal / Overweight/Obese — categorical, 2 levels
+* **Sleep Disorder (X10):** None / Insomnia / Sleep Apnea — categorical, 3 levels
+* **Sleep Duration (Y):** sleep duration in hours
+
+# Practical Question 
+
+The primary research question is:
+
+What demographic, lifestyle, and health-related factors are associated with sleep duration?
+
+More specifically, this analysis investigates whether sleep duration is associated with:
+
+Age
+Gender
+Physical activity level
+Stress level
+Systolic
+Diastolic
+Heart rate
+Daily steps
+BMI category
+Sleep disorder
+
+A secondary goal is to develop a multiple linear regression model that provides a reasonable fit to the data while maintaining interpretable regression coefficients.
+
+# Exploratory Data Analysis 
+
+To start we load the data into R, 
+
+```{r load data}
+sleep <- read.csv("Sleep_health_and_lifestyle_dataset.csv")
+str(sleep)
+```
+
+Clean up BMI Category
+
+```{r}
+sleep$BMI.Category[sleep$BMI.Category == "Normal Weight"] <- "Normal"
+table(sleep$BMI.Category)   # should now show only Normal / Overweight / Obese
+```
+
+Split Blood Pressure into Systolic/Diastolic
+
+```{r}
+bp_split <- strsplit(sleep$Blood.Pressure, "/")
+sleep$Systolic  <- as.numeric(sapply(bp_split, `[`, 1))
+sleep$Diastolic <- as.numeric(sapply(bp_split, `[`, 2))
+str(sleep[, c("Blood.Pressure","Systolic","Diastolic")])   # sanity check
+```
+
+Drop variables exluded in Section 1
+
+```{r}
+sleep.clean <- sleep[, !(names(sleep) %in% 
+                c("Person.ID","Occupation","Quality.of.Sleep","Blood.Pressure"))]
+```
+
+Factor() cateforical variables, this is what tells R to build dummy variables correctly instead of treating them as plain text or numbers
+
+```{r}
+sleep.clean$BMI.Category <- ifelse(sleep.clean$BMI.Category == "Normal", "Normal", "Overweight/Obese")
+sleep.clean$BMI.Category <- factor(sleep.clean$BMI.Category)
+sleep.clean$Gender <- factor(sleep.clean$Gender)
+sleep.clean$Sleep.Disorder <- factor(sleep.clean$Sleep.Disorder, 
+                                       levels = c("None", "Insomnia", "Sleep Apnea"))
+table(sleep.clean$BMI.Category)
+```
+
+Boxplots
+
+```{r sleep-boxplots, fig.cap=c("Figure X: Sleep Duration by Gender", "Figure Y: Sleep Duration by Sleep Disorder")}
+boxplot(Sleep.Duration ~ Gender, data = sleep.clean, main = "Sleep Duration by Gender")
+boxplot(Sleep.Duration ~ Sleep.Disorder, data = sleep.clean, main = "Sleep Duration by Sleep Disorder")
+
+table(sleep.clean$Gender)
+table(sleep.clean$Sleep.Disorder)
+```
+
+Final Data
+
+```{r}
+final.data <- sleep.clean
+library(knitr)
+kable(head(final.data))
+```
+
+# Fitting MLR to the DATA
+
+We start the search for the final model
+
+## Full model and diagnostics
+
+```{r}
+full.model <- lm(Sleep.Duration ~ ., data = final.data)
+kable(summary(full.model)$coef, caption = "Statistics of Regression Coefficients")
+```
+
+```{r, fig.cap="Figure 3: Diagnostic plots for the full model"}
+par(mfrow = c(2,2))
+plot(full.model)
+```
+
+```{r, fig.cap="Figure 4: Adjusted VIF values for the full model"}
+library(car)
+vif(full.model)   # will print as a GVIF matrix — that's expected, not an error
+
+gvif.adj <- vif(full.model)[, "GVIF^(1/(2*Df))"]^2
+barplot(gvif.adj, main = "Adjusted VIF Values", horiz = FALSE, col = "steelblue", las=2)
+```
+
+## Box-Cox Candidate transformations
+
+```{r}
+final.data2 <- final.data
+final.data2$MAP <- final.data2$Diastolic + (final.data2$Systolic - final.data2$Diastolic) / 3
+final.data2 <- final.data2[, !(names(final.data2) %in% c("Systolic", "Diastolic"))]
+
+candidate.model2 <- lm(Sleep.Duration ~ ., data = final.data2)
+kable(summary(candidate.model2)$coef, caption = "Candidate Model: Combined Blood Pressure (MAP)")
+vif(candidate.model2)
+```
+
+```{r, fig.cap="Figure 5: Diagnostic plots for candidate.model2 (MAP)"}
+par(mfrow = c(2,2))
+plot(candidate.model2)
+```
+
+```{r, fig.cap="Figure 6: Box-Cox transformation plot for candidate.model2"}
+library(MASS)
+boxcox(candidate.model2, lambda = seq(-2, 2, by = 0.1))
+```
+
+```{r, fig.cap="Figure 7: Diagnostic plots for candidate.model3 (reciprocal-transformed)"}
+candidate.model3 <- lm(I(1/Sleep.Duration) ~ ., data = final.data2)
+kable(summary(candidate.model3)$coef, caption = "Candidate Model: Reciprocal-Transformed Response")
+
+par(mfrow = c(2,2))
+plot(candidate.model3)
+```
+
+Box-Cox suggested λ = -1 with 1 clearly outside the 95% CI, so a transformation was statistically indicated; I tested the reciprocal transformation as a candidate model; the diagnostic plots showed the same curved residual pattern and heavy Q-Q tails persisted despite the transformation; combined with the loss of interpretability, I proceeding with candidate.model2 (the MAP version) as my working model and noting the remaining non-normality as a limitation, consistent with the same judgment call from Week 3.
+
+### Goodness-of-fit-function
+
+
+```{r}
+select <- function(m){ # m is an object: model
+ e = m$resid
+ n0 = length(e)
+ SSE = (m$df)*(summary(m)$sigma)^2
+ R.sq = summary(m)$r.squared
+ R.adj = summary(m)$adj.r
+ MSE = (summary(m)$sigma)^2
+ Cp = (SSE/MSE)-(n0-2*(n0-m$df))
+ AIC = n0*log(SSE)-n0*log(n0)+2*(n0-m$df)
+ SBC = n0*log(SSE)-n0*log(n0)+(log(n0))*(n0-m$df)
+ X = model.matrix(m)
+ H = X%*%solve(t(X)%*%X)%*%t(X)
+ d = e/(1-diag(H))
+ PRESS = t(d)%*%d
+ tbl = as.data.frame(cbind(SSE=SSE, R.sq=R.sq, R.adj=R.adj, Cp=Cp, AIC=AIC, SBC=SBC, PRD=PRESS))
+ names(tbl) = c("SSE","R.sq","R.adj","Cp","AIC","SBC","PRESS")
+ tbl
+ }
+```
+
+```{r}
+gof.table <- rbind(select(full.model), select(candidate.model2), select(candidate.model3))
+row.names(gof.table) <- c("full.model", "candidate.model2 (MAP)", "candidate.model3 (reciprocal)")
+kable(gof.table, caption = "Goodness-of-Fit Measures of Candidate Models")
+```
+
+## Final Model
+
+The inferential statistics of the final working model are summarized in the following table.
+
+```{r}
+kable(summary(candidate.model2)$coef, caption = "Inferential Statistics of Final Model")
+```
+
+Since the sample size (374) is large, the Central Limit Theorem (CLT) supports relying on the p-values from this model even though the residuals show some deviation from normality. Most predictors have p-values well below 0.05, so we reject the null hypothesis for those coefficients and conclude they are significantly different from zero. Two predictors, however, are close to the threshold: Heart Rate (p = 0.055) and Sleep Disorder: Insomnia (p = 0.084). For these, we fail to reject the null hypothesis, meaning they did not show a statistically significant association with Sleep Duration at the 0.05 level, holding the other variables constant.
+
+## Summary of the Model
+
+We can explicitly write the final model in the following
+
+$$
+\begin{aligned}
+\hat{Y} = 7.861 &+ 0.443(\text{GenderMale}) + 0.041(\text{Age}) + 0.009(\text{Physical.Activity.Level}) \\
+&- 0.307(\text{Stress.Level}) - 0.534(\text{BMI.CategoryOverweight/Obese}) + 0.015(\text{Heart.Rate}) \\
+&- 0.0001(\text{Daily.Steps}) - 0.107(\text{Sleep.DisorderInsomnia}) + 0.146(\text{Sleep.DisorderSleep Apnea}) \\
+&- 0.020(\text{MAP})
+\end{aligned}
+$$
+
+The regression model estimates Sleep Duration using several demographic, lifestyle, health, and sleep-related variables. Holding all other variables constant, males are predicted to sleep about 0.443 more hours than females. Age and physical activity level are both positively associated with sleep duration: each additional year of age corresponds to an estimated 0.041-hour increase, and each additional unit of physical activity corresponds to a 0.009-hour increase. Stress level is negatively associated with sleep duration, with each one-unit increase in stress corresponding to about 0.307 fewer hours of sleep.
+
+BMI category is also negatively associated with sleep duration: individuals in the Overweight/Obese category are predicted to sleep about 0.534 fewer hours than those in the Normal category (the reference group). Heart rate has a small positive coefficient and daily steps has a very small negative coefficient, both indicating modest relationships with sleep duration. Compared with individuals who report no sleep disorder (the reference group), those with insomnia are predicted to sleep about 0.107 fewer hours, while those with sleep apnea are predicted to sleep about 0.146 more hours. Finally, Mean Arterial Pressure (MAP) is negatively associated with sleep duration, with each one-unit increase corresponding to an estimated 0.020-hour decrease, holding all other variables constant.
+
+Overall, nearly all predictors in the model including gender, age, physical activity level, stress level, BMI category, daily steps, sleep apnea status, and MAP — are significantly associated with sleep duration, while heart rate and insomnia status fall just short of the conventional 0.05 significance threshold. These relationships describe associations in the data and should not be interpreted as causal effects.
+
+## Discussions
+
+In this analysis, we explored several regression techniques to identify a final model for predicting Sleep Duration. We tested a Box-Cox transformation for the response variable and found that the optimal lambda value suggested a reciprocal transformation; however, fitting a model with this transformation did not meaningfully improve the residual diagnostics compared to the untransformed response, so we did not adopt it in our final model. We also addressed severe multicollinearity between the Systolic and Diastolic blood pressure variables by combining them into a single Mean Arterial Pressure (MAP) variable, and we simplified imbalanced categorical variables, such as BMI Category, to stabilize the coefficient estimates.
+
+Not all variables in the final model were statistically significant. Heart Rate (p = 0.055) and Sleep Disorder: Insomnia (p = 0.084) both fail to reject the null hypothesis at the 0.05 level. We retained these variables in the final model rather than removing them, since they still contribute to the model's overall explanatory power.
