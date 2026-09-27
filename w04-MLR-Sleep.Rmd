@@ -1,7 +1,7 @@
 ---
-title: 'Predicting Sleep Duration: Multiple Linear Regression'
+title: 'Factors Associated with Sleep Duration: A Multiple Regression and Bootstrap Study'
 author: 'Hayden Patterson'
-date: "09-17-2026"
+date: "09-22-2026"
 output:
   html_document:
     toc: yes
@@ -86,13 +86,42 @@ knitr::opts_chunk$set(echo = TRUE,           # include code chunk in the output 
                       )   
 ```
 
-# Description of Sleep Data
 
-The data set used for this analysis is the Sleep Health and Lifestyle Dataset. The data contain information about 374 individuals and include demographic, lifestyle, sleep, and health-related variables. The response variable selected for this analysis is Sleep Duration, measured in hours. The potential explanatory variables include age, gender, occupation, physical activity level, stress level, BMI category, blood pressure, heart rate, daily steps, and sleep disorder. Quality of Sleep was dropped from the analysis because it is very similar to Sleep Duration and could provide redundant information. Occupation was also dropped because it contains 11 categories with very unbalanced group sizes, including several categories with very few observations, which makes it less suitable for the regression analysis.
+# Introduction
 
-The Person ID variable is not useful for explaining sleep duration because it is simply an identification number, so it is removed from the analysis. The Blood Pressure variable is originally recorded as a single character variable such as “130/85”. Since blood pressure contains two pieces of numerical information, it is separated into Systolic and Diastolic variables. The BMI Category variable originally contains four categories: Normal, Normal Weight, Overweight, and Obese. Normal and Normal Weight were combined because they represent the same general BMI group. Obese was then combined with Overweight because the Obese category contains very few observations. This results in two BMI categories, Normal and Overweight/Obese, providing more balanced groups for the regression analysis. The Sleep Disorder variable contains three categories: Insomnia, None, and Sleep Apnea. There are no missing values in this variable, so no recoding of missing values was necessary.
+## Rationale and Research Question
 
-The final analytic data set contains 374 observations and 10 explanatory variables. The model includes seven numerical predictors and three categorical predictors. Gender has two levels and therefore requires one indicator variable. BMI has two levels and therefore requires one indicator variable, while Sleep Disorder has three levels and requires two indicator variables. Including the intercept, the regression model estimates 12 parameters from 374 observations, which gives approximately 31 observations per parameter. This is above the course guideline of 15 observations per coefficient.
+Sleep is closely linked to mood, physical health, and work performance. Adults who do not get enough sleep tend to be less productive and less healthy, which can make everyday life more difficult. Understanding which factors are associated with shorter or longer sleep can help identify people who may be at risk of not getting enough rest. Some of these factors, such as physical activity and stress, are things people can try to change, while others, such as age and gender, cannot. Knowing which factors matter most can help focus attention on the ones that are within a person's control.
+
+The primary research question is:
+
+**What demographic, lifestyle, and health-related factors are associated with sleep duration?**
+
+More specifically, this analysis investigates whether sleep duration is associated with:
+
+- Age
+- Gender
+- Physical activity level
+- Stress level
+- Blood pressure (combined into mean arterial pressure, MAP)
+- Heart rate
+- Daily steps
+- BMI category
+- Sleep disorder
+
+A secondary goal is to develop a multiple linear regression model that fits the data reasonably well while keeping the regression coefficients easy to interpret. The final model is then checked using two bootstrap methods to see how reliable its estimates are.
+
+## Description of the Sleep Data
+
+The data set used for this analysis is the Sleep Health and Lifestyle Dataset, published on Kaggle by Laksika Tharmalingam. It contains information on 374 individuals, including demographic, lifestyle, sleep, and health-related variables. The response variable is Sleep Duration, measured in hours. The potential explanatory variables include age, gender, occupation, physical activity level, stress level, BMI category, blood pressure, heart rate, daily steps, and sleep disorder.
+
+The data were not collected through a random sample, so the results may not apply to the general population.
+
+Quality of Sleep was dropped from the analysis because it is very similar to Sleep Duration and would provide redundant information. Occupation was also dropped because it contains 11 categories with very unbalanced group sizes, including several categories with very few observations, which makes it less suitable for regression analysis.
+
+## Sufficiency of the Data
+
+The variables in the data set cover all three areas named in the research question: demographic (age, gender), lifestyle (physical activity, stress, daily steps), and health-related (BMI, blood pressure, heart rate, sleep disorder). The final model includes six numerical predictors and three categorical predictors. Gender and BMI category each have two levels and require one indicator variable each, while Sleep Disorder has three levels and requires two. Including the intercept, the final model estimates 11 parameters from 374 observations, or about 34 observations per parameter. This is well above the course guideline of 15 observations per coefficient.
 
 ### Variables
 
@@ -108,28 +137,10 @@ The final analytic data set contains 374 observations and 10 explanatory variabl
 * **Sleep Disorder (X10):** None / Insomnia / Sleep Apnea — categorical, 3 levels
 * **Sleep Duration (Y):** sleep duration in hours
 
-# Practical Question 
 
-The primary research question is:
+# Data Preparation and Exploratory Analysis 
 
-What demographic, lifestyle, and health-related factors are associated with sleep duration?
-
-More specifically, this analysis investigates whether sleep duration is associated with:
-
-Age
-Gender
-Physical activity level
-Stress level
-Systolic
-Diastolic
-Heart rate
-Daily steps
-BMI category
-Sleep disorder
-
-A secondary goal is to develop a multiple linear regression model that provides a reasonable fit to the data while maintaining interpretable regression coefficients.
-
-# Exploratory Data Analysis 
+The Person ID variable is not useful for explaining sleep duration because it is simply an identification number, so it is removed from the analysis. The Blood Pressure variable is originally recorded as a single character variable such as "130/85". Since blood pressure contains two pieces of numerical information, it is separated into Systolic and Diastolic variables. The BMI Category variable originally contains four categories: Normal, Normal Weight, Overweight, and Obese. Normal and Normal Weight were combined because they represent the same general BMI group. Obese was then combined with Overweight because the Obese category contains very few observations. This results in two BMI categories, Normal and Overweight/Obese, providing more balanced groups for the regression analysis. The Sleep Disorder variable contains three categories: Insomnia, None, and Sleep Apnea. There are no missing values in this variable, so no recoding of missing values was necessary.
 
 To start we load the data into R, 
 
@@ -137,6 +148,7 @@ To start we load the data into R,
 sleep <- read.csv("Sleep_health_and_lifestyle_dataset.csv")
 str(sleep)
 ```
+Loading the data show there is 374 observations of 13 variables. 
 
 Clean up BMI Category
 
@@ -144,6 +156,7 @@ Clean up BMI Category
 sleep$BMI.Category[sleep$BMI.Category == "Normal Weight"] <- "Normal"
 table(sleep$BMI.Category)   # should now show only Normal / Overweight / Obese
 ```
+Now BMI category only has three categories Normal / Overweight / Obese
 
 Split Blood Pressure into Systolic/Diastolic
 
@@ -153,15 +166,17 @@ sleep$Systolic  <- as.numeric(sapply(bp_split, `[`, 1))
 sleep$Diastolic <- as.numeric(sapply(bp_split, `[`, 2))
 str(sleep[, c("Blood.Pressure","Systolic","Diastolic")])   # sanity check
 ```
+This helps for reading Blood.Pressure from its original form, Ex. "130/84"
 
-Drop variables exluded in Section 1
+Drop variables excluded in Section 1
 
 ```{r}
 sleep.clean <- sleep[, !(names(sleep) %in% 
                 c("Person.ID","Occupation","Quality.of.Sleep","Blood.Pressure"))]
 ```
+Made a new Data set called "sleep.clean" to includ only the data needed. 
 
-Factor() cateforical variables, this is what tells R to build dummy variables correctly instead of treating them as plain text or numbers
+Factor() categorical variables, this is what tells R to build dummy variables correctly instead of treating them as plain text or numbers
 
 ```{r}
 sleep.clean$BMI.Category <- ifelse(sleep.clean$BMI.Category == "Normal", "Normal", "Overweight/Obese")
@@ -174,7 +189,7 @@ table(sleep.clean$BMI.Category)
 
 Boxplots
 
-```{r sleep-boxplots, fig.cap=c("Figure X: Sleep Duration by Gender", "Figure Y: Sleep Duration by Sleep Disorder")}
+```{r sleep-boxplots, fig.cap=c("Figure 1: Sleep Duration by Gender", "Figure 2: Sleep Duration by Sleep Disorder")}
 boxplot(Sleep.Duration ~ Gender, data = sleep.clean, main = "Sleep Duration by Gender")
 boxplot(Sleep.Duration ~ Sleep.Disorder, data = sleep.clean, main = "Sleep Duration by Sleep Disorder")
 
@@ -190,7 +205,14 @@ library(knitr)
 kable(head(final.data))
 ```
 
-# Fitting MLR to the DATA
+```{r}
+sum(duplicated(final.data))       # rows that exactly repeat an earlier row
+nrow(unique(final.data))          # number of unique rows
+```
+Of the 374 observations, 244 are exact duplicates of another row, leaving only 130 unique observations. Since this may reflect how the data set was created, all rows were kept for the analysis, but this is noted as a limitation.
+
+
+# Model Building
 
 We start the search for the final model
 
@@ -214,7 +236,7 @@ gvif.adj <- vif(full.model)[, "GVIF^(1/(2*Df))"]^2
 barplot(gvif.adj, main = "Adjusted VIF Values", horiz = FALSE, col = "steelblue", las=2)
 ```
 
-## Box-Cox Candidate transformations
+## Remedy for Multicollinearity: MAP
 
 ```{r}
 final.data2 <- final.data
@@ -244,7 +266,16 @@ par(mfrow = c(2,2))
 plot(candidate.model3)
 ```
 
-Box-Cox suggested λ = -1 with 1 clearly outside the 95% CI, so a transformation was statistically indicated; I tested the reciprocal transformation as a candidate model; the diagnostic plots showed the same curved residual pattern and heavy Q-Q tails persisted despite the transformation; combined with the loss of interpretability, I proceeding with candidate.model2 (the MAP version) as my working model and noting the remaining non-normality as a limitation, consistent with the same judgment call from Week 3.
+Box-Cox suggested λ = -1 with 1 clearly outside the 95% CI, so a transformation was statistically indicated; I tested the reciprocal transformation as a candidate model; the diagnostic plots showed the same curved residual pattern and heavy Q-Q tails persisted despite the transformation; combined with the loss of interpretability, I proceeded with candidate.model2 (the MAP version) as my working model and noting the remaining non-normality as a limitation.
+
+## Variable Selection
+
+```{r}
+step.model <- step(candidate.model2, direction = "both", trace = 0)
+kable(summary(step.model)$coef, caption = "Stepwise-Selected Model")
+```
+
+Bidirectional stepwise selection starting from the MAP model removed no predictors. Heart Rate (p = 0.055) and the Insomnia level of Sleep Disorder (p = 0.084) have borderline p-values but still stayed in the model. This is because step() chooses variables by AIC rather than by p-values: roughly, a single-coefficient variable stays in the model when |t| is greater than about 1.41, and Heart Rate's t-value is 1.92. Sleep Disorder is coded as two indicator variables that are kept or dropped together, and since Sleep Apnea is significant (p = 0.043), the variable as a whole stays in the model. Therefore, candidate.model2 is the final model.
 
 ### Goodness-of-fit-function
 
@@ -276,6 +307,8 @@ row.names(gof.table) <- c("full.model", "candidate.model2 (MAP)", "candidate.mod
 kable(gof.table, caption = "Goodness-of-Fit Measures of Candidate Models")
 ```
 
+The reciprocal model (candidate.model3) cannot be compared with the other two models using this table. Its response is 1/Sleep Duration instead of Sleep Duration, so its SSE, AIC, SBC, and PRESS are measured on a different scale. For this reason, the choice between the untransformed and reciprocal models was based on the residual plots rather than on these measures.
+
 ## Final Model
 
 The inferential statistics of the final working model are summarized in the following table.
@@ -286,7 +319,6 @@ kable(summary(candidate.model2)$coef, caption = "Inferential Statistics of Final
 
 Since the sample size (374) is large, the Central Limit Theorem (CLT) supports relying on the p-values from this model even though the residuals show some deviation from normality. Most predictors have p-values well below 0.05, so we reject the null hypothesis for those coefficients and conclude they are significantly different from zero. Two predictors, however, are close to the threshold: Heart Rate (p = 0.055) and Sleep Disorder: Insomnia (p = 0.084). For these, we fail to reject the null hypothesis, meaning they did not show a statistically significant association with Sleep Duration at the 0.05 level, holding the other variables constant.
 
-## Summary of the Model
 
 We can explicitly write the final model in the following
 
@@ -294,19 +326,131 @@ $$
 \begin{aligned}
 \hat{Y} = 7.861 &+ 0.443(\text{GenderMale}) + 0.041(\text{Age}) + 0.009(\text{Physical.Activity.Level}) \\
 &- 0.307(\text{Stress.Level}) - 0.534(\text{BMI.CategoryOverweight/Obese}) + 0.015(\text{Heart.Rate}) \\
-&- 0.0001(\text{Daily.Steps}) - 0.107(\text{Sleep.DisorderInsomnia}) + 0.146(\text{Sleep.DisorderSleep Apnea}) \\
+&- 0.000062(\text{Daily.Steps}) - 0.107(\text{Sleep.DisorderInsomnia}) + 0.146(\text{Sleep.DisorderSleep Apnea}) \\
 &- 0.020(\text{MAP})
 \end{aligned}
 $$
 
-The regression model estimates Sleep Duration using several demographic, lifestyle, health, and sleep-related variables. Holding all other variables constant, males are predicted to sleep about 0.443 more hours than females. Age and physical activity level are both positively associated with sleep duration: each additional year of age corresponds to an estimated 0.041-hour increase, and each additional unit of physical activity corresponds to a 0.009-hour increase. Stress level is negatively associated with sleep duration, with each one-unit increase in stress corresponding to about 0.307 fewer hours of sleep.
+# Bootstrapping the Final Model
 
-BMI category is also negatively associated with sleep duration: individuals in the Overweight/Obese category are predicted to sleep about 0.534 fewer hours than those in the Normal category (the reference group). Heart rate has a small positive coefficient and daily steps has a very small negative coefficient, both indicating modest relationships with sleep duration. Compared with individuals who report no sleep disorder (the reference group), those with insomnia are predicted to sleep about 0.107 fewer hours, while those with sleep apnea are predicted to sleep about 0.146 more hours. Finally, Mean Arterial Pressure (MAP) is negatively associated with sleep duration, with each one-unit increase corresponding to an estimated 0.020-hour decrease, holding all other variables constant.
+## Bootstrapping Records
 
-Overall, nearly all predictors in the model including gender, age, physical activity level, stress level, BMI category, daily steps, sleep apnea status, and MAP — are significantly associated with sleep duration, while heart rate and insomnia status fall just short of the conventional 0.05 significance threshold. These relationships describe associations in the data and should not be interpreted as causal effects.
+```{r}
+set.seed(123)                                 
+B <- 1000                                     # number of bootstrap samples
+n <- nrow(final.data2)                        # 374
+coef.mat <- NULL                              # empty; one row gets added per loop
 
-## Discussions
+for (i in 1:B) {
+  idx <- sample(1:n, n, replace = TRUE)      # pick n row numbers, with repeats allowed
+  boot.dat <- final.data2[idx, ]              # the resampled data set
+  boot.fit <- lm(formula(candidate.model2), data = boot.dat)   # refit the FINAL model
+  coef.mat <- rbind(coef.mat, coef(boot.fit))     # save this sample's coefficients
+}
 
-In this analysis, we explored several regression techniques to identify a final model for predicting Sleep Duration. We tested a Box-Cox transformation for the response variable and found that the optimal lambda value suggested a reciprocal transformation; however, fitting a model with this transformation did not meaningfully improve the residual diagnostics compared to the untransformed response, so we did not adopt it in our final model. We also addressed severe multicollinearity between the Systolic and Diastolic blood pressure variables by combining them into a single Mean Arterial Pressure (MAP) variable, and we simplified imbalanced categorical variables, such as BMI Category, to stabilize the coefficient estimates.
+dim(coef.mat)                                 # check: should be 1000 rows x 11 columns
+```
 
-Not all variables in the final model were statistically significant. Heart Rate (p = 0.055) and Sleep Disorder: Insomnia (p = 0.084) both fail to reject the null hypothesis at the 0.05 level. We retained these variables in the final model rather than removing them, since they still contribute to the model's overall explanatory power.
+```{r}
+boot.ci <- apply(coef.mat, 2, quantile, probs = c(0.025, 0.975))
+kable(t(boot.ci), caption = "Bootstrap (Records) 95% Confidence Intervals")
+```
+Our regression model was built from one sample of 374 people. If we had surveyed a different group of 374 people, we would have gotten slightly different results. Bootstrapping lets us estimate how much the results could change, without collecting new data.
+
+To bootstrap the records, we treated our 374 people as a stand-in for the whole population. We then drew a new sample of 374 people from them at random, allowing the same person to be picked more than once. Because of this, some people show up two or three times in a new sample and others don't show up at all. We fit the same regression model to this new sample and saved the results. We repeated this 1,000 times, which gave us 1,000 slightly different versions of each coefficient.
+
+To build a 95% confidence interval for each coefficient, we lined up its 1,000 values from smallest to largest and cut off the lowest 2.5% and the highest 2.5%. The middle 95% is the range of values we can reasonably expect. If that range includes 0, we can't be confident the variable is related to sleep duration at all.
+
+Using this method, the interval for Heart Rate includes 0, so we cannot conclude that heart rate is related to sleep duration. The interval for Insomnia (−0.2044 to −0.0223), however, stays entirely below 0. This suggests that people with insomnia sleep less than people with no sleep disorder, which the regular model did not show (p = 0.084). All other predictors had intervals that did not include 0, which supports their relationships with sleep duration.
+
+## Bootstrapping Residuals 
+
+```{r}
+set.seed(123)
+yhat <- fitted(candidate.model2)                          # fitted values from the final model
+res  <- resid(candidate.model2)                           # residuals from the final model
+res.coef.mat <- NULL                         # new name so you don't overwrite coef.mat
+
+for (i in 1:B) {
+  boot.dat2 <- final.data2
+  boot.dat2$Sleep.Duration <- yhat + sample(res, n, replace = TRUE)  # new fake response
+  boot.fit2 <- lm(formula(candidate.model2), data = boot.dat2)
+  res.coef.mat <- rbind(res.coef.mat, coef(boot.fit2))
+}
+
+res.boot.ci <- apply(res.coef.mat, 2, quantile, probs = c(0.025, 0.975))
+kable(t(res.boot.ci), caption = "Bootstrap (Residuals) 95% Confidence Intervals")
+```
+A regression model splits each person's sleep duration into two parts. The first part is what the model predicts from their age, stress level, and other factors. The second part is what's left over, called the residual. It covers everything the model can't explain, like a noisy neighbor or a late night out.
+
+In this method, we kept each person's information exactly the same, so their prediction stayed the same too. We only shuffled the leftover parts. For each person, we took their predicted sleep and added a residual drawn at random from all 374 residuals, again allowing repeats. This produced a new, realistic set of sleep durations. We fit the model to this new set and saved the coefficients, and we repeated the process 1,000 times.
+
+The 95% confidence intervals were found the same way as before, by keeping the middle 95% of the 1,000 values. The interval for Heart Rate (−0.0010 to 0.0302) includes 0, which agrees with both the regular model and the records bootstrap. The interval for Insomnia (−0.2225 to 0.0133) also includes 0, which agrees with the regular model's p-value of 0.084 but disagrees with the records bootstrap, where Insomnia's interval stayed below 0. Sleep Apnea's interval (0.0063 to 0.2834) sits just above 0, so its effect is likely real but borderline. Every other predictor's interval stays clearly away from 0. These intervals are very close to the model's regular confidence intervals. That's expected, because this method makes the same assumption as the regular model: it treats the leftover noise as the same size for everyone. The records method doesn't make that assumption, which may explain why the two methods disagree about Insomnia.
+
+# Combining Regular and Bootstrap Results
+
+```{r}
+reg.ci <- confint(candidate.model2)           # regular t-based 95% CIs
+
+compare.tbl <- data.frame(
+  Estimate  = coef(candidate.model2),
+  p.value   = summary(candidate.model2)$coef[, 4],
+  Reg.Lower = reg.ci[, 1],      Reg.Upper = reg.ci[, 2],
+  Rec.Lower = boot.ci[1, ],     Rec.Upper = boot.ci[2, ],
+  Res.Lower = res.boot.ci[1, ], Res.Upper = res.boot.ci[2, ]
+)
+kable(compare.tbl, digits = 4, 
+      caption = "Regular vs. Bootstrap 95% Confidence Intervals")
+```
+
+```{r}
+width.tbl <- data.frame(
+  Regular   = reg.ci[, 2] - reg.ci[, 1],
+  Records   = boot.ci[2, ] - boot.ci[1, ],
+  Residuals = res.boot.ci[2, ] - res.boot.ci[1, ]
+)
+kable(width.tbl, digits = 4, caption = "Width of 95% Confidence Intervals")
+```
+# Summary and Discussion 
+
+## Summarizing the Results
+
+We compared three sets of 95% confidence intervals: the regular intervals from the regression output, the records bootstrap, and the residuals bootstrap. For most predictors, all three methods agree. Gender, age, physical activity, stress level, BMI category, daily steps, sleep apnea, and MAP have intervals that stay away from 0 under every method, so we can be confident these variables are related to sleep duration. Heart rate includes 0 under every method, so we cannot conclude that it is related to sleep duration.
+
+The residual bootstrap intervals were nearly identical to the regular intervals, which is expected since both rely on the same assumptions. The records bootstrap was different: it gave narrower intervals for every categorical predictor (gender, BMI, and both sleep disorder levels) and slightly wider intervals for heart rate, stress level, and the intercept. This suggests that the amount of unexplained variation in sleep is not the same across groups, which the regular model assumes. The biggest effect of this was on insomnia. Its interval included 0 under the regular and residual methods but stayed entirely below 0 under the records bootstrap. The data set also contains 244 duplicate rows out of 374, which may make all three methods, and especially the records bootstrap, look more precise than they really are.
+
+## Interpreting the Coefficients
+
+Since sleep duration was not transformed, every coefficient is measured in hours of sleep, and each describes an association while holding all other variables in the model constant.
+
+- **Gender:** Males sleep about 0.44 hours (about 27 minutes) more than females.
+- **Age:** Each additional year of age is associated with about 0.04 more hours (about 2.4 minutes) of sleep.
+- **Physical activity:** Each additional 10 minutes of daily activity is associated with about 0.09 more hours (about 5 minutes) of sleep.
+- **Stress level:** Each one-point increase on the 1–10 stress scale is associated with about 0.31 fewer hours (about 18 minutes) of sleep. This is the strongest predictor in the model.
+- **BMI category:** People in the Overweight/Obese group sleep about 0.53 fewer hours (about 32 minutes) than people with normal BMI.
+- **Daily steps:** Each additional 1,000 steps is associated with about 0.06 fewer hours (about 4 minutes) of sleep.
+- **MAP:** Each 10-point increase in mean arterial pressure is associated with about 0.20 fewer hours (about 12 minutes) of sleep.
+- **Sleep apnea:** People with sleep apnea sleep about 0.15 more hours (about 9 minutes) than people with no sleep disorder, though this effect is borderline.
+- **Insomnia:** People with insomnia sleep about 0.11 fewer hours (about 6 minutes) than people with no sleep disorder, but this is significant only under the records bootstrap.
+- **Heart rate:** Not significantly related to sleep duration under any method.
+
+These are associations found in this dataset, not causes. For example, the model does not show that lowering stress would make someone sleep longer.
+
+```{r}
+cor(final.data2$Physical.Activity.Level, final.data2$Daily.Steps)
+```
+
+Daily steps has a negative coefficient even though physical activity has a positive one. The two variables are strongly correlated (r = 0.77) and have the highest VIF values in the final model (5.482 and 5.622), so the model has difficulty separating their individual effects. Because of this overlap, the daily steps coefficient should not be read as meaning that walking more reduces sleep.
+
+## Main Findings 
+
+Under all three methods, every predictor except heart rate and insomnia was clearly linked to sleep duration. The variable with the largest impact on sleep duration was stress: each one-level increase in stress was associated with about 18 fewer minutes of sleep. The biggest change from bootstrapping was for insomnia. Its interval stayed entirely below 0 under the records bootstrap (−0.2044 to −0.0223) but included 0 under the regular model and the residual bootstrap, so its effect on sleep duration remains uncertain. Overall, bootstrapping supported the regular model: every predictor that was significant in the regular model stayed significant under both bootstrap methods, and the residual bootstrap intervals nearly matched the regular confidence intervals.
+
+## Drawbacks and future improvements 
+
+There were several drawbacks in this analysis. First, the residuals were not normally distributed, and the Box-Cox transformation did not fix this. Because the sample is large, the Central Limit Theorem still supports our p-values, and the bootstrap intervals, which do not rely on normality, largely agreed with the regular results. Second, sleep apnea had a positive effect on sleep duration, which goes against common sense. This could be due to an underlying factor, such as its close relationship with BMI, or to a problem in how the data were recorded, and it would be worth looking into further. Third, daily steps had a negative effect on sleep even though physical activity had a positive one. Since steps are a form of physical activity, the two variables are strongly correlated (r = 0.77), and the model has difficulty separating their effects. A future model could keep only one of them or combine them into a single activity measure. Fourth, the records bootstrap suggested that the variation in sleep is not equal across groups, which the regular model assumes. Finally, 244 of the 374 rows are exact duplicates, leaving only 130 unique observations. Repeated rows make the model treat the same information as if it came from different people, which makes the standard errors, p-values, and confidence intervals look more precise than they really are. This also affects the bootstrap, since resampling duplicated rows can understate the true variability. Removing duplicates and refitting the model would give more trustworthy results.
+
+## Recommendations
+
+Based on this model, I would recommend using it to show which factors are associated with longer or shorter sleep duration, such as stress level, BMI category, and physical activity. It would be useful as a starting point for identifying groups that may be at risk of short sleep, like people with high stress. I would not use it to predict a specific person's sleep based on factors such as activity or stress, because the model describes average relationships and individuals can differ a lot. It also should not be used to claim that changing one of these factors will increase sleep duration, since this is observational data and shows associations, not causes.
+
