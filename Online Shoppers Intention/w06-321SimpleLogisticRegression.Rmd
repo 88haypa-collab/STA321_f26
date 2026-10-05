@@ -1,0 +1,339 @@
+---
+title: 'Online Shoppers Intention'
+author: 'Hayden Patterson'
+date: "West Chester University "
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    toc_depth: 4
+    fig_width: 6
+    fig_height: 4
+    fig_caption: yes
+    number_sections: yes
+    toc_collapsed: yes
+    code_folding: hide
+    code_download: yes
+    smooth_scroll: yes
+    theme: lumen
+  word_document:
+    toc: yes
+    toc_depth: 4
+    fig_caption: yes
+    keep_md: yes
+  pdf_document:
+    toc: yes
+    toc_depth: 4
+    fig_caption: yes
+    number_sections: yes
+    fig_width: 5
+    fig_height: 4
+---
+
+```{=html}
+<style type="text/css">
+
+div#TOC li {
+    list-style:none;
+    background-image:none;
+    background-repeat:none;
+    background-position:0;
+}
+
+h1.title {
+  font-size: 20px;
+  font-weight: bold;
+  color: DarkRed;
+  text-align: center;
+}
+h4.author { /* Header 4 - and the author and data headers use this too  */
+    font-size: 18px;
+    font-weight: bold;
+  font-family: "Times New Roman", Times, serif;
+  color: DarkRed;
+  text-align: center;
+}
+h4.date { /* Header 4 - and the author and data headers use this too  */
+  font-size: 18px;
+  font-weight: bold;
+  font-family: "Times New Roman", Times, serif;
+  color: DarkBlue;
+  text-align: center;
+}
+h1 { /* Header 3 - and the author and data headers use this too  */
+    font-size: 22px;
+    font-weight: bold;
+    font-family: "Times New Roman", Times, serif;
+    color: darkred;
+    text-align: center;
+}
+h2 { /* Header 3 - and the author and data headers use this too  */
+    font-size: 18px;
+    font-weight: bold;
+    font-family: "Times New Roman", Times, serif;
+    color: navy;
+    text-align: left;
+}
+
+h3 { /* Header 3 - and the author and data headers use this too  */
+    font-size: 16px;
+    font-weight: bold;
+    font-family: "Times New Roman", Times, serif;
+    color: navy;
+    text-align: left;
+}
+
+h4 { /* Header 4 - and the author and data headers use this too  */
+    font-size: 14px;
+    font-weight: bold;
+    font-family: "Times New Roman", Times, serif;
+    color: darkred;
+    text-align: left;
+}
+</style>
+```
+
+```{r setup, include=FALSE}
+# This chunk runs first and sets up the document.
+# It loads the two packages used for formatting (knitr, pander); if a package is
+# missing it installs it first. The opts_chunk line sets the default behavior
+# of every chunk: show the code (echo), hide warnings/messages so the report
+# stays clean, and print output without the "##" prefix (comment = NA).
+if (!require("knitr")) {
+   install.packages("knitr")
+   library(knitr)
+}
+if (!require("pander")) {
+   install.packages("pander")
+   library(pander)
+}
+#
+# specifications of outputs of code in code chunks
+knitr::opts_chunk$set(echo = TRUE,
+                      warning = FALSE,
+                      message = FALSE,
+                      results = TRUE,
+                      comment = NA
+                      )
+```
+
+# Introduction
+
+Online retailers want to know which parts of a customer's browsing behavior lead to a purchase. This study uses data on online shopping sessions to see whether one browsing measure, the session's exit rate, is related to the chance that the session ends in a purchase. I use a simple logistic regression model to measure this relationship.
+
+# Data Source
+
+This online shoppers data set (UCI Machine Learning Repository) includes 12,330 observations with 18 variables, 10 numerical and 8 categorical. Each row is one browsing session on an e-commerce website. The 8 categorical variables include the response, `Revenue`.
+
+The 18 variables are:
+
+1. **Administrative**: Number of account-management pages visited in the session.
+
+2. **Administrative_Duration**: Time spent on administrative pages (seconds).
+
+3. **Informational**: Number of informational pages visited.
+
+4. **Informational_Duration**: Time spent on informational pages (seconds).
+
+5. **ProductRelated**: Number of product pages visited.
+
+6. **ProductRelated_Duration**: Time spent on product pages (seconds).
+
+7. **BounceRates**: Average bounce rate of the pages visited (share of visits that leave after viewing only that page).
+
+8. **ExitRates**: Average exit rate of the pages visited (share of views of a page that were the last in the session).
+
+9. **PageValues**: Average value of the pages visited before a purchase was completed.
+
+10. **SpecialDay**: How close the session date is to a special day (such as Valentine's Day); a score between 0 and 1.
+
+11. **Month**: Month of the session.
+
+12. **OperatingSystems**: Operating system of the visitor (coded as a number).
+
+13. **Browser**: Browser used by the visitor (coded as a number).
+
+14. **Region**: Region of the visitor (coded as a number).
+
+15. **TrafficType**: How the visitor arrived at the site (coded as a number).
+
+16. **VisitorType**: New visitor, returning visitor, or other.
+
+17. **Weekend**: Whether the session happened on a weekend (TRUE/FALSE).
+
+18. **Revenue**: Whether the session ended in a purchase (TRUE/FALSE). This is the response variable.
+
+**Loading the data.** The code below reads the CSV file into R and checks that it loaded correctly. This is done first so I know the size of the data, the type of each variable, and whether anything is missing before I analyze it. (The CSV file needs to be in the same folder as this .Rmd file.)
+
+```{r}
+shoppers = read.csv("online_shoppers_intention.csv")   # read the CSV file into a data frame called shoppers
+str(shoppers)                            # shows the type of each variable (number, text, TRUE/FALSE)
+dim(shoppers)                            # number of rows and columns
+colSums(is.na(shoppers))                 # counts missing values in each column
+head(shoppers)                           # shows the first 6 rows
+```
+
+The data has 12,330 rows and 18 columns, and the missing-value check shows no missing values, so no rows need to be removed. `Revenue` is stored as TRUE/FALSE.
+
+**Coding the response as 0/1.** Logistic regression models the probability of an event, so I make a numeric version of `Revenue` where 1 means "purchase" and 0 means "no purchase". This follows the approach in the class case study, and it lets me check that the coding is correct.
+
+```{r}
+y0 = shoppers$Revenue                # pull out the Revenue column
+revenue.01 = rep(0, length(y0))      # start with a column of all 0s, one for each session
+revenue.01[which(y0 == TRUE)] = 1    # change to 1 wherever the session ended in a purchase
+shoppers$revenue.01 = revenue.01     # save the 0/1 column back into the data frame
+head(shoppers)
+table(shoppers$Revenue, shoppers$revenue.01)   # check: TRUE should line up with 1 and FALSE with 0
+```
+
+The table shows 10,422 sessions without a purchase (coded 0) and 1,908 with a purchase (coded 1), and the two columns line up exactly, so the coding is correct. About 15.5% of sessions ended in a purchase.
+
+**Looking at candidate predictors.** Before choosing a predictor, I check the summary statistics of a few candidates (minimum, quartiles, mean, and maximum). This shows how skewed each one is and whether it has many zeros.
+
+```{r}
+summary(shoppers$ProductRelated_Duration)
+summary(shoppers$ExitRates)
+summary(shoppers$BounceRates)
+summary(shoppers$PageValues)
+```
+
+`ProductRelated_Duration` is highly right-skewed (the mean is about double the median), `BounceRates` is close to zero for most sessions, and `PageValues` is exactly zero for more than 75% of sessions. `ExitRates` is continuous and has no large pile-up at zero, so it is the cleanest choice for a simple logistic regression.
+
+# Analytic Question
+
+The objective of this study is to explore the association between a session's exit rate and the odds that the session ends in a purchase. Exit rate is a web analytics metric: for a given page, it is the percentage of that page's views that were the last in a visitor's session. For each session in this data set, the recorded exit rate is the average of the exit rates of the pages visited, so a higher value indicates that the session passed through pages that visitors commonly leave from.
+
+For this study, the exit rate values were rescaled to percentage points, so a one-unit increase corresponds to a one-percentage-point increase in exit rate.
+
+# Exploratory Data Analysis
+
+Since we only study the simple logistic regression model, only one predictor variable is included in the model. We first perform exploratory data analysis on the predictor variable to see how its values are spread out and whether it is extremely skewed.
+
+**Exit rate histogram.** The raw exit rates are decimals between 0 and 0.20, which would make the odds ratio hard to read (a "one-unit" change would be bigger than the whole range). So I first multiply by 100 to put exit rate in percentage points. Then I draw a histogram with a smooth density curve on top to see the shape of the distribution.
+
+```{r}
+shoppers$exit.pct = shoppers$ExitRates * 100     # rescale to percentage points (0.05 becomes 5)
+
+ylimit = max(density(shoppers$exit.pct, adjust = 2)$y)   # tallest point of the density curve, used to leave room at the top of the plot
+hist(shoppers$exit.pct, probability = TRUE,      # probability = TRUE so the bars are comparable to the density curve
+     main = "Exit Rate Distribution",
+     xlab = "Exit Rate (percentage points)",
+     ylim = c(0, 1.20 * ylimit),                 # 20% extra height so the tallest bar is not cut off
+     col = "azure1",
+     border = "lightseagreen")
+lines(density(shoppers$exit.pct, adjust = 2), col = "blue")   # smooth curve showing the overall shape
+```
+
+The histogram shows that exit rate is strongly right-skewed: most sessions have exit rates below 5 percentage points (median about 2.5, mean about 4.3), with a long right tail and a small cluster of sessions near the maximum of 20. Because logistic regression makes no distributional assumption about the predictor, no transformation is applied at this stage.
+
+**Exit rate by purchase status.** Next I compare exit rates for sessions with and without a purchase. This previews what the model should find: if the two groups look different, exit rate is likely related to purchasing. The `tapply` line prints the median of each group so I can quote exact numbers.
+
+```{r fig.align='center', fig.width=5, fig.height=4}
+boxplot(exit.pct ~ Revenue, data = shoppers,       # one box for each Revenue group (FALSE, then TRUE)
+        main = "Exit Rate by Purchase Status",
+        xlab = "Session Outcome",
+        ylab = "Exit Rate (percentage points)",
+        names = c("No purchase", "Purchase"),       # readable labels instead of FALSE/TRUE
+        col = c("azure1", "lightseagreen"),
+        border = "navy")
+tapply(shoppers$exit.pct, shoppers$Revenue, median)  # median exit rate for each group
+```
+
+The boxplot compares exit rates for sessions with and without a purchase. Sessions that ended in a purchase have a lower median exit rate (about 1.6 percentage points) than sessions that did not (about 2.9 percentage points), suggesting that higher exit rates are associated with a lower chance of purchasing. Both groups also contain a number of high exit-rate sessions near the 20-point ceiling, consistent with the cluster seen in the histogram.
+
+**Balance of the response.** Here I count the purchases and compute the purchase rate. This matters because if one outcome were very rare, the model could be hard to fit.
+
+```{r}
+n.purchase = sum(shoppers$revenue.01)       # adding up the 1s counts the purchases
+n.total = nrow(shoppers)                    # total number of sessions
+prop.purchase = mean(shoppers$revenue.01)   # the average of 0/1 values is the proportion of 1s
+
+c(purchases = n.purchase, total = n.total, proportion = round(prop.purchase, 3))
+```
+
+The data set contains 12,330 online shopping sessions, of which 1,908 (15.5%) ended in a purchase. Purchases are the minority outcome, but the class split is not extreme, so the data are adequate for fitting a logistic regression model.
+
+# Building a Simple Logistic Regression Model
+
+**Fitting the model.** The `glm()` function fits the logistic regression. The formula `Revenue ~ exit.pct` says "model the chance of a purchase using exit rate." The `binomial(link = "logit")` setting tells R the response has two outcomes and to use the logit (log-odds) link, which is what makes this logistic regression. R treats TRUE (a purchase) as the event, so the model estimates the probability of a purchase.
+
+```{r}
+s.logit = glm(Revenue ~ exit.pct,                    # response ~ predictor
+              family = binomial(link = "logit"),     # logistic regression
+              data = shoppers)
+result = summary(s.logit)
+result
+```
+
+The exit rate coefficient is negative (about -0.349) with a p-value close to zero, so exit rate is significantly associated with the chance of a purchase, and higher exit rates go with a lower chance.
+
+**Coefficient table with confidence intervals.** This pulls the key numbers out of the model into one clean table. `confint()` adds the 95% confidence interval for each coefficient, and `pander()` formats the table nicely.
+
+```{r comment = NA, message = FALSE}
+model.coef.stats = summary(s.logit)$coef                   # estimates, standard errors, z values, p-values
+conf.ci = confint(s.logit)                                 # 95% confidence intervals for the coefficients
+sum.stats = cbind(model.coef.stats, conf.ci.95 = conf.ci)  # combine them into one table
+pander(sum.stats, caption = "The summary stats of regression coefficients")
+```
+
+The 95% confidence interval for the exit rate coefficient is about (-0.381, -0.318). It does not contain zero, which supports a real negative association.
+
+**Odds ratios.** The coefficients are on the log-odds scale, which is hard to explain to a non-technical reader. Taking `exp()` of a coefficient converts it to an odds ratio, which is easier to interpret. The second chunk does the same for the confidence interval.
+
+```{r}
+odds.ratio = exp(coef(s.logit))                             # convert coefficients to odds ratios
+out.stats = cbind(model.coef.stats, odds.ratio = odds.ratio)
+pander(out.stats, caption = "Summary Stats with Odds Ratios")
+```
+
+```{r}
+exp(conf.ci)    # 95% confidence interval for the odds ratios
+```
+
+The odds ratio for exit rate is 0.71, meaning that for each one-percentage-point increase in a session's exit rate, the odds of ending in a purchase decrease by approximately 29%. This is a substantial association, and the 95% confidence interval for the odds ratio (about 0.68 to 0.73) lies entirely below 1.
+
+The intercept's odds ratio (about 0.48) is the odds of a purchase when the exit rate is 0, which corresponds to a purchase probability of about 33% (calculated in the next section).
+
+**Probability curve and rate of change.** To see how the chance of a purchase changes with exit rate, I use the fitted model to calculate the purchase probability at 200 evenly spaced exit rates across the observed range. The left plot shows that probability curve. The right plot shows the rate of change (how much the probability moves for a one-point increase in exit rate), which is calculated with the formula `beta1 * p * (1 - p)`. The rate is negative because the probability is falling, so the y-axis limits are set to run from the lowest value up to 0.
+
+```{r fig.align='center', fig.height=4, fig.width=7}
+exit.range = range(shoppers$exit.pct)                        # smallest and largest exit rate in the data
+x = seq(exit.range[1], exit.range[2], length = 200)          # 200 evenly spaced exit rates
+beta.x = coef(s.logit)[1] + coef(s.logit)[2]*x               # the model's log-odds at each exit rate
+success.prob = exp(beta.x)/(1+exp(beta.x))                   # convert log-odds to purchase probability
+failure.prob = 1/(1+exp(beta.x))                             # probability of no purchase
+ylimit = max(success.prob, failure.prob)                     # used to set the plot height
+##
+beta1 = coef(s.logit)[2]                                     # slope of the model
+success.prob.rate = beta1*exp(beta.x)/(1+exp(beta.x))^2      # rate of change of the probability
+##
+par(mfrow = c(1,2))                                          # put the two plots side by side
+plot(x, success.prob, type = "l", lwd = 2, col = "navy",
+     main = "The probability of a purchase",
+     ylim = c(0, 1.1*ylimit),
+     xlab = "Exit Rate (percentage points)",
+     ylab = "probability",
+     col.main = "navy",
+     cex.main = 0.8)
+##
+y.rate = min(success.prob.rate)       # the rate is negative, so use the minimum (most negative value)
+plot(x, success.prob.rate, type = "l", lwd = 2, col = "navy",
+     main = "The rate of change in the probability \n of a purchase",
+     xlab = "Exit Rate (percentage points)",
+     ylab = "Rate of Change",
+     ylim = c(1.1*y.rate, 0),
+     col.main = "navy",
+     cex.main = 0.8)
+```
+
+The probability of a purchase declines as exit rate increases, falling from about 33% at an exit rate of 0 and leveling off near zero for high exit rates. The rate of change is steepest at low exit rates, so each additional percentage point of exit rate reduces the purchase probability most when exit rates are small, and the effect diminishes as exit rates grow.
+
+**Checking the starting probability.** The line below converts the intercept to a probability using `plogis()`, the logistic function. This confirms the roughly 33% starting point seen on the left plot.
+
+```{r}
+plogis(coef(s.logit)[1])    # purchase probability when exit rate = 0
+```
+
+# Conclusion
+
+This study explored the association between a session's exit rate and the probability of a purchase using a simple logistic regression model on 12,330 online shopping sessions. The results show a strong negative association: for each one-percentage-point increase in exit rate, the odds of a purchase decrease by approximately 29% (odds ratio 0.71, 95% CI about 0.68 to 0.73). The estimated probability of purchase declines from about 33% at an exit rate of 0 and levels off near zero at high exit rates, with the steepest decline at low exit rates. These results describe an association rather than a causal effect, and purchase behavior depends on many other factors. The analysis could be improved by incorporating additional predictors, such as visitor type, traffic source, and page values, which will be explored in the multiple logistic regression model.
